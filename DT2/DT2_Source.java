@@ -65,7 +65,14 @@ public class InventoryApprovalWorkflow {
 
     // 3. CÁC LỚP XỬ LÝ NGOẠI LỆ (CUSTOM EXCEPTIONS)
     public static class SecurityException extends RuntimeException {
-        public SecurityException(String message) { super(message); }
+        private PurchaseOrder rejectedPo; // Bổ sung để mang đối tượng PO ra ngoài
+
+        public SecurityException(String message, PurchaseOrder rejectedPo) { 
+            super(message); 
+            this.rejectedPo = rejectedPo;
+        }
+    
+        public PurchaseOrder getRejectedPo() { return rejectedPo; }
     }
 
     public static class UnauthorizedException extends RuntimeException {
@@ -92,7 +99,7 @@ public class InventoryApprovalWorkflow {
 
             if ("Hóa chất dễ cháy".equalsIgnoreCase(product.getCategory())) {
                 po.setStatus(PoStatus.REJECTED);
-                throw new SecurityException("ERR-SEC-01: Hệ thống từ chối nhập Hóa chất dễ cháy.");
+                throw new SecurityException("ERR-SEC-01: Hệ thống từ chối nhập Hóa chất dễ cháy.", po);
             }
 
             return po;
