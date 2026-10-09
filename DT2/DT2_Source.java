@@ -65,7 +65,7 @@ public class InventoryApprovalWorkflow {
 
     // 3. CÁC LỚP XỬ LÝ NGOẠI LỆ (CUSTOM EXCEPTIONS)
     public static class SecurityException extends RuntimeException {
-        private PurchaseOrder rejectedPo; // Bổ sung để mang đối tượng PO ra ngoài
+        private PurchaseOrder rejectedPo;
 
         public SecurityException(String message, PurchaseOrder rejectedPo) { 
             super(message); 
