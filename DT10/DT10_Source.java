@@ -10,8 +10,14 @@ public class EWalletTransactionSystem {
     }
 
     public static class SuspiciousActivityException extends RuntimeException {
-        public SuspiciousActivityException(String message) {
+        private final TransactionResponse response;
+        public SuspiciousActivityException(String message, TransactionResponse response) {
             super(message);
+            this.response = response;
+        }
+    
+        public TransactionResponse getResponse() {
+            return response;
         }
     }
 
@@ -91,7 +97,8 @@ public class EWalletTransactionSystem {
 
         // 2.3. Quy tắc Kiểm soát Gian lận (Fraud Control) - Ưu tiên Cao nhất
         if (request.isNewDevice() && request.getAmount() >= FRAUD_AMOUNT_THRESHOLD) {
-            throw new SuspiciousActivityException("Giao dịch vượt hạn mức trên thiết bị mới");
+            TransactionResponse blockedResponse = new TransactionResponse(TransactionStatus.BLOCKED, 0.0, 0.0);
+            throw new SuspiciousActivityException("Giao dịch vượt hạn mức trên thiết bị mới", blockedResponse);
             // Ghi chú: Nếu hệ thống bắt buộc trả về response BLOCKED thay vì ném lỗi làm crash app, 
             // Đặc tả yêu cầu: Khóa giao dịch, Fee=0, Cashback=0, và ném ngoại lệ.
             // Vì ném ngoại lệ sẽ ngắt luồng, ta ưu tiên throw exception theo đúng mô tả "Ném ngoại lệ SuspiciousActivityException".
