@@ -1,22 +1,24 @@
-// 1. Định nghĩa các ngoại lệ (Exception)
-class LowValueOrderException extends RuntimeException {
-    public LowValueOrderException(String message) {
-        super(message);
-    }
-}
+package com.benchmark;
 
-// 2. Định nghĩa các Enum theo Đặc tả
-enum AffiliateLevel {
-    BRONZE, SILVER, GOLD
-}
-
-enum ProductCategory {
-    FASHION, ELECTRONICS, DIGITAL_SOFTWARE
-}
-
-// 3. Class chính xử lý logic tính toán
 public class AffiliateCommissionSystem {
 
+    // 1. Đưa Exception vào làm static inner class
+    public static class LowValueOrderException extends RuntimeException {
+        public LowValueOrderException(String message) {
+            super(message);
+        }
+    }
+
+    // 2. Đưa Enum vào bên trong class chính
+    public enum AffiliateLevel {
+        BRONZE, SILVER, GOLD
+    }
+
+    public enum ProductCategory {
+        FASHION, ELECTRONICS, DIGITAL_SOFTWARE
+    }
+
+    // 3. Logic tính toán chính
     public long calculateCommission(long saleAmount, AffiliateLevel affiliateLevel, ProductCategory productCategory, boolean isFirstBuyer) {
         // Kiểm tra tính hợp lệ cơ bản
         if (saleAmount <= 0) {
@@ -75,9 +77,8 @@ public class AffiliateCommissionSystem {
         }
 
         // ==========================================
-        // QUY TẮC 4: THƯỞNG KHÁCH HÀNG MỚI (BẪY GHI ĐÈ) & QUY TẮC 5
+        // QUY TẮC 4: THƯỞNG KHÁCH HÀNG MỚI (BẪY GHI ĐÈ)
         // ==========================================
-        // Tiền thưởng 50.000 VNĐ CHỈ ĐƯỢC CỘNG nếu tổng hoa hồng ở Quy tắc 3 lớn hơn 0
         if (finalCommission > 0 && isFirstBuyer) {
             finalCommission += 50000;
         }
