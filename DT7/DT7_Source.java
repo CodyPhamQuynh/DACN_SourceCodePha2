@@ -1,5 +1,4 @@
 // File: AffiliateCommissionSystem.java
-public class AffiliateCommissionSystem {
     // 1. Định nghĩa các ngoại lệ (Exception)
     class LowValueOrderException extends RuntimeException {
         public LowValueOrderException(String message) {
@@ -87,4 +86,3 @@ public class AffiliateCommissionSystem {
             return finalCommission;
         }
     }
-}
