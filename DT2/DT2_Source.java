@@ -1,4 +1,6 @@
-public class InventoryApprovalWorkflow {
+package com.benchmark;
+
+class InventoryApprovalWorkflow {
 
     // 1. CÁC ENUM TRẠNG THÁI VÀ QUYỀN HẠN
     public enum Role {
@@ -19,6 +21,7 @@ public class InventoryApprovalWorkflow {
             this.role = role;
         }
 
+        public String getUsername() { return username; }
         public Role getRole() { return role; }
     }
 
@@ -33,6 +36,7 @@ public class InventoryApprovalWorkflow {
             this.isBulky = isBulky;
         }
 
+        public String getName() { return name; }
         public String getCategory() { return category; }
         public boolean isBulky() { return isBulky; }
     }
@@ -64,14 +68,15 @@ public class InventoryApprovalWorkflow {
     }
 
     // 3. CÁC LỚP XỬ LÝ NGOẠI LỆ (CUSTOM EXCEPTIONS)
-    public static class SecurityException extends RuntimeException {
-        private PurchaseOrder rejectedPo;
+    // Kế thừa java.lang.SecurityException để tránh xung đột tên class với gói java.lang mặc định
+    public static class SecurityException extends java.lang.SecurityException {
+        private final PurchaseOrder rejectedPo;
 
-        public SecurityException(String message, PurchaseOrder rejectedPo) { 
-            super(message); 
+        public SecurityException(String message, PurchaseOrder rejectedPo) {
+            super(message);
             this.rejectedPo = rejectedPo;
         }
-    
+
         public PurchaseOrder getRejectedPo() { return rejectedPo; }
     }
 
@@ -86,8 +91,8 @@ public class InventoryApprovalWorkflow {
     // 4. LỚP NGHIỆP VỤ LÕI (CORE SERVICE)
     public static class InventoryApprovalService {
 
-        private static final double MANAGER_APPROVAL_LIMIT = 20000000.0; // 20 triệu VNĐ
-        private static final double BULKY_SURCHARGE = 500000.0; // 500k VNĐ
+        private static final double MANAGER_APPROVAL_LIMIT = 20_000_000.0; // 20 triệu VNĐ
+        private static final double BULKY_SURCHARGE = 500_000.0; // 500k VNĐ
 
         // [Rule 2.2 & EX-01] Staff tạo PO và Bẫy khóa Fail-fast
         public PurchaseOrder createPO(User user, Product product, int quantity, double unitPrice) {
@@ -137,16 +142,15 @@ public class InventoryApprovalWorkflow {
         public void forwardToDirector(User user, PurchaseOrder po) {
             checkExpired(po);
 
-            if (user.getRole() == Role.STAFF) {
-                throw new UnauthorizedException("Nhân viên kho không có quyền chuyển trạng thái.");
+            if (user.getRole() != Role.MANAGER) {
+                throw new UnauthorizedException("Chỉ Quản lý ca (Manager) mới thực hiện đẩy PO lên Giám đốc.");
             }
 
-            if (user.getRole() == Role.MANAGER) {
-                if (po.getStatus() != PoStatus.DRAFT) {
-                    throw new UnauthorizedException("Manager chỉ có thể đẩy PO từ trạng thái DRAFT.");
-                }
-                po.setStatus(PoStatus.PENDING_DIRECTOR);
+            if (po.getStatus() != PoStatus.DRAFT) {
+                throw new UnauthorizedException("Manager chỉ có thể đẩy PO từ trạng thái DRAFT.");
             }
+
+            po.setStatus(PoStatus.PENDING_DIRECTOR);
         }
 
         // [Rule 2.2] Ma trận phê duyệt
@@ -161,14 +165,13 @@ public class InventoryApprovalWorkflow {
                 if (po.getStatus() != PoStatus.DRAFT) {
                     throw new UnauthorizedException("Manager chỉ có thể duyệt PO ở trạng thái DRAFT.");
                 }
-                
+
                 double totalValue = calculateTotalValue(po);
                 if (totalValue > MANAGER_APPROVAL_LIMIT) {
                     throw new UnauthorizedException("Vượt quá thẩm quyền. Tổng PO > 20.000.000 VNĐ, Manager chỉ được chuyển sang PENDING_DIRECTOR.");
                 }
                 po.setStatus(PoStatus.APPROVED);
-            } 
-            else if (user.getRole() == Role.DIRECTOR) {
+            } else {
                 if (po.getStatus() == PoStatus.DRAFT || po.getStatus() == PoStatus.PENDING_DIRECTOR) {
                     po.setStatus(PoStatus.APPROVED);
                 } else {
@@ -181,14 +184,14 @@ public class InventoryApprovalWorkflow {
         public void rejectPO(User user, PurchaseOrder po) {
             checkExpired(po);
 
-            if (user.getRole() == Role.DIRECTOR) {
-                if (po.getStatus() == PoStatus.DRAFT || po.getStatus() == PoStatus.PENDING_DIRECTOR) {
-                    po.setStatus(PoStatus.REJECTED);
-                } else {
-                    throw new UnauthorizedException("Trạng thái hiện tại không hợp lệ để từ chối.");
-                }
-            } else {
+            if (user.getRole() != Role.DIRECTOR) {
                 throw new UnauthorizedException("Chỉ Director mới có quyền từ chối PO.");
+            }
+
+            if (po.getStatus() == PoStatus.DRAFT || po.getStatus() == PoStatus.PENDING_DIRECTOR) {
+                po.setStatus(PoStatus.REJECTED);
+            } else {
+                throw new UnauthorizedException("Trạng thái hiện tại không hợp lệ để từ chối.");
             }
         }
 
