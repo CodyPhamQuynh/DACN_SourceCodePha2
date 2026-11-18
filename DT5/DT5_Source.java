@@ -1,4 +1,6 @@
-public class LoanOverduePenaltySystem {
+package com.benchmark;
+
+class LoanOverduePenaltySystem {
 
     // --- CÁC ENUM DỮ LIỆU ---
     public enum CustomerGroup {
@@ -23,10 +25,10 @@ public class LoanOverduePenaltySystem {
     }
 
     // --- HÀM NGHIỆP VỤ CHÍNH ---
-    public double calculateFinalPenaltyAmount(double loanAmount, int overdueDays, 
-                                              CustomerGroup customerGroup, 
+    public double calculateFinalPenaltyAmount(double loanAmount, int overdueDays,
+                                              CustomerGroup customerGroup,
                                               CollateralType collateralType) {
-        
+
         // 2. Ràng buộc dữ liệu đầu vào
         if (loanAmount <= 0) {
             throw new InvalidLoanAmountException("Dư nợ gốc phải lớn hơn 0");
@@ -34,48 +36,35 @@ public class LoanOverduePenaltySystem {
         if (overdueDays < 0) {
             throw new InvalidDateException("Số ngày trễ hạn không được nhỏ hơn 0");
         }
-        
+
         // Nếu không trễ hạn ngày nào, không có tiền phạt
         if (overdueDays == 0) {
             return 0.0;
         }
 
-        // Quy tắc 1: Phí phạt cố định (Fixed Penalty Fee)
-        double fixedPenaltyFee = 0;
-        if (overdueDays >= 1 && overdueDays <= 10) {
-            fixedPenaltyFee = 100000;
-        } else if (overdueDays >= 11 && overdueDays <= 30) {
-            fixedPenaltyFee = 500000;
-        } else if (overdueDays > 30) {
-            fixedPenaltyFee = 2000000;
-        }
-
-        // Ngoại lệ Ân hạn (Grace Period)
-        if (customerGroup == CustomerGroup.STANDARD && overdueDays <= 3) {
-            fixedPenaltyFee = 0;
+        // Quy tắc 1: Phí phạt cố định (Fixed Penalty Fee) & Ngoại lệ Ân hạn (Grace Period)
+        double fixedPenaltyFee;
+        if (overdueDays <= 10) {
+            fixedPenaltyFee = (customerGroup == CustomerGroup.STANDARD && overdueDays <= 3) ? 0.0 : 100_000.0;
+        } else if (overdueDays <= 30) {
+            fixedPenaltyFee = 500_000.0;
+        } else {
+            fixedPenaltyFee = 2_000_000.0;
         }
 
         // Quy tắc 2: Lãi suất phạt cộng dồn (Penalty Interest)
-        double penaltyInterest = 0;
+        double penaltyInterest = 0.0;
         if (overdueDays > 10) {
-            // 0.05% tương đương với 0.0005
-            penaltyInterest = loanAmount * 0.0005 * (overdueDays - 10);
-            
-            // Giới hạn (Max Cap): Không vượt quá 10% dư nợ gốc
-            double maxInterest = loanAmount * 0.10;
-            if (penaltyInterest > maxInterest) {
-                penaltyInterest = maxInterest;
-            }
+            // 0.05% tương đương 0.0005, trần tối đa 10% dư nợ gốc
+            double calculatedInterest = loanAmount * 0.0005 * (overdueDays - 10);
+            penaltyInterest = Math.min(calculatedInterest, loanAmount * 0.10);
         }
 
-        // Quy tắc 3: Giảm trừ tài sản thế chấp (Collateral Discount)
+        // Quy tắc 3: Giảm trừ tài sản thế chấp (Collateral Discount) & Ghi đè BAD_DEBT
         double rawPenalty = fixedPenaltyFee + penaltyInterest;
         double discountRate = 0.0;
 
-        // Quy tắc Ghi đè (Override): BAD_DEBT vô hiệu hóa mọi giảm trừ
-        if (customerGroup == CustomerGroup.BAD_DEBT) {
-            discountRate = 0.0; 
-        } else {
+        if (customerGroup != CustomerGroup.BAD_DEBT) {
             if (collateralType == CollateralType.REAL_ESTATE) {
                 discountRate = 0.20; // Giảm 20%
             } else if (collateralType == CollateralType.VEHICLE) {
@@ -83,11 +72,8 @@ public class LoanOverduePenaltySystem {
             }
         }
 
-        double discountAmount = rawPenalty * discountRate;
-
         // Quy tắc 4: Tính toán cuối cùng
-        double finalPenaltyAmount = rawPenalty - discountAmount;
-        
-        return finalPenaltyAmount;
+        double discountAmount = rawPenalty * discountRate;
+        return rawPenalty - discountAmount;
     }
 }
