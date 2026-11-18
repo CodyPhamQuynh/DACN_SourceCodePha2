@@ -1,4 +1,6 @@
-public class FlightRefundSystem {
+package com.benchmark;
+
+class FlightRefundSystem {
 
     // 1. Khai báo các hằng số và cấu trúc dữ liệu Enum
     public enum TicketClass {
@@ -24,7 +26,7 @@ public class FlightRefundSystem {
         private CustomerTier customerTier;
         private boolean isForceMajeure;
 
-        public RefundRequest(long ticketPrice, TicketClass ticketClass, int hoursToDeparture, 
+        public RefundRequest(long ticketPrice, TicketClass ticketClass, int hoursToDeparture,
                              CustomerTier customerTier, boolean isForceMajeure) {
             this.ticketPrice = ticketPrice;
             this.ticketClass = ticketClass;
@@ -50,62 +52,51 @@ public class FlightRefundSystem {
             throw new InvalidTicketException("Số giờ tính tới lúc cất cánh không hợp lệ");
         }
 
-        // Quy tắc 4: Quyền Lực Tối Thượng - Bất khả kháng (Force Majeure Override)
-        if (request.isForceMajeure()) {
-            // Ngoại lệ kép (Nested Trap): Khách hạng SAVER hủy sát giờ (<24h) không được áp dụng bất khả kháng
-            boolean isSaverShattered = (request.getTicketClass() == TicketClass.SAVER 
-                                        && request.getHoursToDeparture() < 24);
-            
-            if (!isSaverShattered) {
-                // Vô hiệu hóa Quy tắc 1 và 2, hoàn 100% tiền vé
-                return request.getTicketPrice();
-            }
-            // Nếu rơi vào isSaverShattered, hệ thống bỏ qua lệnh if này và đi tiếp xuống luồng phạt bên dưới
-        }
-
-        // Quy tắc 1: Tỷ lệ phạt cơ bản (Base Penalty Rate)
-        double penaltyRate = 0.0;
         int hours = request.getHoursToDeparture();
         TicketClass tClass = request.getTicketClass();
 
+        // Quy tắc 4: Quyền Lực Tối Thượng - Bất khả kháng (Force Majeure Override)
+        if (request.isForceMajeure()) {
+            // Ngoại lệ kép (Nested Trap): Khách hạng SAVER hủy sát giờ (<24h) không được áp dụng bất khả kháng
+            if (!(tClass == TicketClass.SAVER && hours < 24)) {
+                return request.getTicketPrice();
+            }
+        }
+
+        // Quy tắc 1: Tỷ lệ phạt cơ bản (Base Penalty Rate)
+        double penaltyRate;
         if (hours >= 72) {
-            if (tClass == TicketClass.BUSINESS) penaltyRate = 0.0;
-            else if (tClass == TicketClass.FLEX) penaltyRate = 0.10;
-            else if (tClass == TicketClass.SAVER) penaltyRate = 0.30;
+            if (tClass == TicketClass.BUSINESS) {
+                penaltyRate = 0.0;
+            } else if (tClass == TicketClass.FLEX) {
+                penaltyRate = 0.10;
+            } else {
+                penaltyRate = 0.30;
+            }
         } else if (hours >= 24) { // 24h <= hours < 72h
-            if (tClass == TicketClass.BUSINESS) penaltyRate = 0.20;
-            else if (tClass == TicketClass.FLEX) penaltyRate = 0.50;
-            else if (tClass == TicketClass.SAVER) penaltyRate = 1.0; // Phạt 100%
+            if (tClass == TicketClass.BUSINESS) {
+                penaltyRate = 0.20;
+            } else if (tClass == TicketClass.FLEX) {
+                penaltyRate = 0.50;
+            } else {
+                penaltyRate = 1.0; // SAVER phạt 100%
+            }
         } else { // < 24h
-            if (tClass == TicketClass.BUSINESS) penaltyRate = 0.50;
-            else if (tClass == TicketClass.FLEX) penaltyRate = 1.0; // Phạt 100%
-            else if (tClass == TicketClass.SAVER) penaltyRate = 1.0; // Phạt 100%
+            if (tClass == TicketClass.BUSINESS) {
+                penaltyRate = 0.50;
+            } else {
+                penaltyRate = 1.0; // FLEX và SAVER đều phạt 100%
+            }
         }
 
         long penaltyAmount = (long) (request.getTicketPrice() * penaltyRate);
         long remainingAmount = request.getTicketPrice() - penaltyAmount;
 
         // Quy tắc 2: Phí xử lý hệ thống (System Surcharge)
-        long systemSurcharge = 200_000;
-        
-        // Điều kiện 1: Nếu tiền vé đã bị phạt sạch (còn <= 0), không thu thêm phí xử lý
-        if (remainingAmount <= 0) {
-            systemSurcharge = 0;
-        }
-        
-        // Điều kiện 2: Hạng PLATINUM miễn hoàn toàn phí xử lý trong mọi trường hợp
-        if (request.getCustomerTier() == CustomerTier.PLATINUM) {
-            systemSurcharge = 0;
-        }
+        // Chỉ thu 200.000 VNĐ nếu tiền vé còn lại > 0 và khách không phải PLATINUM
+        long systemSurcharge = (remainingAmount > 0 && request.getCustomerTier() != CustomerTier.PLATINUM) ? 200_000L : 0L;
 
         // Quy tắc 3: Chống nợ xấu (Negative Balance Prevention)
-        long refundAmount = remainingAmount - systemSurcharge;
-        
-        // Nếu phí xử lý cao hơn tiền vé còn lại, tự động làm tròn về 0, không bắt khách bù thêm
-        if (refundAmount < 0) {
-            refundAmount = 0;
-        }
-
-        return refundAmount;
+        return Math.max(0L, remainingAmount - systemSurcharge);
     }
 }
