@@ -1,4 +1,6 @@
-public class EWalletTransactionSystem {
+package com.benchmark;
+
+class EWalletTransactionSystem {
 
     // ==========================================
     // 1. CÁC LỚP NGOẠI LỆ (EXCEPTIONS)
@@ -11,11 +13,12 @@ public class EWalletTransactionSystem {
 
     public static class SuspiciousActivityException extends RuntimeException {
         private final TransactionResponse response;
+
         public SuspiciousActivityException(String message, TransactionResponse response) {
             super(message);
             this.response = response;
         }
-    
+
         public TransactionResponse getResponse() {
             return response;
         }
@@ -36,9 +39,9 @@ public class EWalletTransactionSystem {
         SUCCESS, BLOCKED
     }
 
-    private static final double MAX_MONTHLY_CASHBACK = 500000.0;
-    private static final double FRAUD_AMOUNT_THRESHOLD = 20000000.0;
-    private static final double MIN_STANDARD_TRANSFER_FEE = 5000.0;
+    private static final double MAX_MONTHLY_CASHBACK = 500_000.0;
+    private static final double FRAUD_AMOUNT_THRESHOLD = 20_000_000.0;
+    private static final double MIN_STANDARD_TRANSFER_FEE = 5_000.0;
 
     // ==========================================
     // 3. ĐỐI TƯỢNG DỮ LIỆU ĐẦU VÀO / ĐẦU RA
@@ -51,7 +54,7 @@ public class EWalletTransactionSystem {
         private final int dailyTransferCount;
         private final double monthlyAccumulatedCashback;
 
-        public TransactionRequest(double amount, TransactionType type, CustomerTier tier, 
+        public TransactionRequest(double amount, TransactionType type, CustomerTier tier,
                                   boolean isNewDevice, int dailyTransferCount, double monthlyAccumulatedCashback) {
             this.amount = amount;
             this.type = type;
@@ -60,7 +63,7 @@ public class EWalletTransactionSystem {
             this.dailyTransferCount = dailyTransferCount;
             this.monthlyAccumulatedCashback = monthlyAccumulatedCashback;
         }
-        
+
         public double getAmount() { return amount; }
         public TransactionType getType() { return type; }
         public CustomerTier getTier() { return tier; }
@@ -70,9 +73,9 @@ public class EWalletTransactionSystem {
     }
 
     public static class TransactionResponse {
-        private TransactionStatus status;
-        private double fee;
-        private double cashback;
+        private final TransactionStatus status;
+        private final double fee;
+        private final double cashback;
 
         public TransactionResponse(TransactionStatus status, double fee, double cashback) {
             this.status = status;
@@ -89,7 +92,7 @@ public class EWalletTransactionSystem {
     // 4. LỚP XỬ LÝ LOGIC NGHIỆP VỤ CHÍNH
     // ==========================================
     public TransactionResponse processTransaction(TransactionRequest request) {
-        
+
         // 3. [EX-01] Kiểm tra dữ liệu đầu vào (Input Validation)
         if (request.getAmount() <= 0) {
             throw new InvalidAmountException("Số tiền giao dịch không hợp lệ");
@@ -99,12 +102,8 @@ public class EWalletTransactionSystem {
         if (request.isNewDevice() && request.getAmount() >= FRAUD_AMOUNT_THRESHOLD) {
             TransactionResponse blockedResponse = new TransactionResponse(TransactionStatus.BLOCKED, 0.0, 0.0);
             throw new SuspiciousActivityException("Giao dịch vượt hạn mức trên thiết bị mới", blockedResponse);
-            // Ghi chú: Nếu hệ thống bắt buộc trả về response BLOCKED thay vì ném lỗi làm crash app, 
-            // Đặc tả yêu cầu: Khóa giao dịch, Fee=0, Cashback=0, và ném ngoại lệ.
-            // Vì ném ngoại lệ sẽ ngắt luồng, ta ưu tiên throw exception theo đúng mô tả "Ném ngoại lệ SuspiciousActivityException".
         }
 
-        // Nếu qua được chốt chặn gian lận -> Giao dịch SUCCESS
         TransactionStatus finalStatus = TransactionStatus.SUCCESS;
         double finalFee = 0.0;
         double finalCashback = 0.0;
@@ -123,62 +122,32 @@ public class EWalletTransactionSystem {
     }
 
     private double calculateTransferFee(double amount, CustomerTier tier, int dailyTransferCount) {
-        switch (tier) {
-            case VIP:
-                // Hạng VIP: Miễn phí mọi giao dịch chuyển tiền
+        if (tier == CustomerTier.VIP) {
+            return 0.0;
+        } else if (tier == CustomerTier.PREMIUM) {
+            if (dailyTransferCount < 10) {
                 return 0.0;
-            
-            case PREMIUM:
-                // Hạng Cao cấp: Miễn phí 10 giao dịch đầu tiên (0 đến 9)
-                if (dailyTransferCount < 10) {
-                    return 0.0;
-                } else {
-                    // Từ giao dịch 11 trở đi (daily >= 10): phí 1% số tiền chuyển
-                    return amount * 0.01;
-                }
-                
-            case STANDARD:
-                // Hạng Tiêu chuẩn: Miễn phí 3 giao dịch đầu tiên (0, 1, 2)
-                if (dailyTransferCount < 3) {
-                    return 0.0;
-                } else {
-                    // Từ giao dịch 4 trở đi: phí 2%, tối thiểu 5.000 VNĐ
-                    double calculatedFee = amount * 0.02;
-                    return Math.max(calculatedFee, MIN_STANDARD_TRANSFER_FEE);
-                }
-                
-            default:
+            }
+            return amount * 0.01;
+        } else {
+            // Hạng STANDARD: Miễn phí 3 giao dịch đầu tiên (0, 1, 2)
+            if (dailyTransferCount < 3) {
                 return 0.0;
+            }
+            return Math.max(amount * 0.02, MIN_STANDARD_TRANSFER_FEE);
         }
     }
 
     private double calculateCashback(double amount, CustomerTier tier, double monthlyAccumulatedCashback) {
-        double rawCashback = 0.0;
-
-        // Tính toán Cashback thô dựa trên Hạng
-        switch (tier) {
-            case STANDARD:
-                return 0.0; // Không hoàn tiền
-                
-            case PREMIUM:
-                // Hoàn 5%, tối đa 50.000 VNĐ / 1 giao dịch
-                rawCashback = Math.min(amount * 0.05, 50000.0);
-                break;
-                
-            case VIP:
-                // Hoàn 10%, tối đa 100.000 VNĐ / 1 giao dịch
-                rawCashback = Math.min(amount * 0.10, 100000.0);
-                break;
+        if (tier == CustomerTier.STANDARD || monthlyAccumulatedCashback >= MAX_MONTHLY_CASHBACK) {
+            return 0.0;
         }
 
-        // Ràng buộc Lũy kế tháng (Monthly Cashback Cap - Tối đa 500.000 VNĐ)
-        if (monthlyAccumulatedCashback >= MAX_MONTHLY_CASHBACK) {
-            return 0.0; // Đã cạn kiệt lũy kế
-        }
+        double rawCashback = (tier == CustomerTier.PREMIUM)
+                ? Math.min(amount * 0.05, 50_000.0)
+                : Math.min(amount * 0.10, 100_000.0);
 
         double remainingCapacity = MAX_MONTHLY_CASHBACK - monthlyAccumulatedCashback;
-        
-        // Nếu phần cashback hiện tại cộng vào vượt quá sức chứa còn lại -> Chỉ cấp phần bù còn lại (Delta)
         return Math.min(rawCashback, remainingCapacity);
     }
 }
