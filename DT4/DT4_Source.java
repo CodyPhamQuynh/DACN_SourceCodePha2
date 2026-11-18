@@ -1,4 +1,6 @@
-public class DualVoucherSystem {
+package com.benchmark;
+
+class DualVoucherSystem {
 
     // =========================================================================
     // 1. CÁC ENUM ĐỊNH NGHĨA DỮ LIỆU ĐẦU VÀO
@@ -60,10 +62,10 @@ public class DualVoucherSystem {
     // 4. LỚP XỬ LÝ LOGIC NGHIỆP VỤ CHÍNH (SERVICE)
     // =========================================================================
     public CheckoutResult calculateFinalAmount(
-            long cartValue, 
-            Category category, 
+            long cartValue,
+            Category category,
             PaymentMethod paymentMethod,
-            ShopVoucher shopVoucher, 
+            ShopVoucher shopVoucher,
             PlatformVoucher platformVoucher) {
 
         // --- RÀNG BUỘC ĐẦU VÀO ---
@@ -75,19 +77,16 @@ public class DualVoucherSystem {
         long platformDiscount = 0;
 
         // --- BƯỚC 1 & 2: TÍNH TOÁN SHOP VOUCHER ---
-        // Bẫy Logic: Ngành hàng ELECTRONICS KHÔNG ĐƯỢC PHÉP dùng Shop Voucher
+        // Ghi đè ngoại lệ: Ngành hàng ELECTRONICS KHÔNG ĐƯỢC PHÉP dùng Shop Voucher
         if (category != Category.ELECTRONICS && shopVoucher != null) {
             if (shopVoucher == ShopVoucher.SHOP_50K) {
                 if (cartValue >= 200_000) {
                     shopDiscount = 50_000;
                 }
-            } else if (shopVoucher == ShopVoucher.SHOP_10PT) {
+            } else {
+                // SHOP_10PT: Giảm 10%, tối đa 30.000 VNĐ cho đơn từ 150.000 VNĐ
                 if (cartValue >= 150_000) {
-                    shopDiscount = (long) (cartValue * 0.1);
-                    // Trần tối đa 30.000 VNĐ
-                    if (shopDiscount > 30_000) {
-                        shopDiscount = 30_000;
-                    }
+                    shopDiscount = Math.min((long) (cartValue * 0.10), 30_000L);
                 }
             }
         }
@@ -98,30 +97,24 @@ public class DualVoucherSystem {
         // --- BƯỚC 4: TÍNH TOÁN PLATFORM VOUCHER ---
         if (platformVoucher != null) {
             if (platformVoucher == PlatformVoucher.PLATFORM_FREESHIP) {
-                // Min Spend xét trên Giá gốc (cartValue), KHÔNG xét trên tempValue
+                // Min Spend xét trên Giá gốc (cartValue)
                 if (cartValue < 100_000 || (paymentMethod != PaymentMethod.VNPAY && paymentMethod != PaymentMethod.CREDIT_CARD)) {
                     throw new VoucherConditionException("Không đủ điều kiện áp dụng PLATFORM_FREESHIP");
                 }
                 platformDiscount = 30_000;
-                
-            } else if (platformVoucher == PlatformVoucher.PLATFORM_20PT) {
+
+            } else {
+                // PLATFORM_20PT: Đơn từ 500.000 VNĐ và bắt buộc thanh toán bằng VNPAY
                 if (cartValue < 500_000 || paymentMethod != PaymentMethod.VNPAY) {
                     throw new VoucherConditionException("Không đủ điều kiện áp dụng PLATFORM_20PT");
                 }
-                // Giảm 20% trên GIÁ TẠM TÍNH (tempValue)
-                platformDiscount = (long) (tempValue * 0.2);
-                // Trần tối đa 100.000 VNĐ (Khắc phục lỗi STT 11 của AI)
-                if (platformDiscount > 100_000) {
-                    platformDiscount = 100_000;
-                }
+                // Giảm 20% trên GIÁ TẠM TÍNH (tempValue), tối đa 100.000 VNĐ
+                platformDiscount = Math.min((long) (tempValue * 0.20), 100_000L);
             }
         }
 
         // --- BƯỚC 5: CHỐT TỔNG TIỀN VÀ CHỐNG ÂM ---
-        long finalAmount = tempValue - platformDiscount;
-        if (finalAmount < 0) {
-            finalAmount = 0;
-        }
+        long finalAmount = Math.max(0L, tempValue - platformDiscount);
 
         return new CheckoutResult(cartValue, shopDiscount, platformDiscount, finalAmount);
     }
