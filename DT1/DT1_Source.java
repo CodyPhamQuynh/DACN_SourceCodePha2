@@ -1,6 +1,8 @@
+package com.benchmark;
+
 import java.util.List;
 
-public class CheckoutService {
+class CheckoutService {
 
     // Định nghĩa các hạng thành viên theo đặc tả
     public enum CustomerTier {
@@ -61,17 +63,19 @@ public class CheckoutService {
         boolean hasLimitedItem = false;
 
         // BƯỚC 1: Tính tổng giá trị giỏ hàng & Kiểm tra tính chất sản phẩm
-        for (CartItem item : request.getItems()) {
-            totalCartValue += item.getPrice();
-            if (item.isLimitedEdition()) {
-                hasLimitedItem = true;
+        if (request.getItems() != null) {
+            for (CartItem item : request.getItems()) {
+                totalCartValue += item.getPrice();
+                if (item.isLimitedEdition()) {
+                    hasLimitedItem = true;
+                }
             }
         }
 
         // BƯỚC 2: Quy tắc Phí vận chuyển (Shipping Rules)
-        long shippingFee = 0;
+        long shippingFee;
         boolean freeshipConditionA = totalCartValue >= 1_500_000;
-        boolean freeshipConditionB = (request.getTier() == CustomerTier.GOLD || request.getTier() == CustomerTier.DIAMOND) 
+        boolean freeshipConditionB = (request.getTier() == CustomerTier.GOLD || request.getTier() == CustomerTier.DIAMOND)
                                       && totalCartValue >= 800_000;
 
         if (freeshipConditionA || freeshipConditionB) {
@@ -85,27 +89,36 @@ public class CheckoutService {
         String couponCode = request.getCouponCode();
 
         if (couponCode != null && !couponCode.trim().isEmpty()) {
+            String trimmedCode = couponCode.trim();
+
+            // Ràng buộc số lượng mã: Tối đa 01 mã giảm giá trên một đơn hàng
+            if (trimmedCode.contains(",") || trimmedCode.contains(";") || trimmedCode.contains(" ")) {
+                throw new InvalidCouponException("Chỉ cho phép áp dụng tối đa 01 mã giảm giá trên một đơn hàng");
+            }
+
             // Ràng buộc sản phẩm Limited (Kiểm tra trước khi xử lý logic mã)
             if (hasLimitedItem) {
                 throw new InvalidCouponException("Không áp dụng mã giảm giá cho sản phẩm Limited");
             }
 
-            if (couponCode.equals("NEWBIE")) {
+            if ("NEWBIE".equals(trimmedCode)) {
                 if (request.getTier() != CustomerTier.NEW) {
                     throw new InvalidCouponException("Mã giảm giá áp dụng sai đối tượng");
                 }
                 long discount = (long) (totalCartValue * 0.10);
                 discountAmount = Math.min(discount, 100_000); // Max cap 100k
 
-            } else if (couponCode.equals("SNEAKERVIP")) {
+            } else if ("SNEAKERVIP".equals(trimmedCode)) {
                 if (totalCartValue < 2_000_000) {
                     throw new InvalidCouponException("Không đủ điều kiện áp dụng mã");
                 }
-                
+
                 if (request.getTier() == CustomerTier.STANDARD || request.getTier() == CustomerTier.SILVER) {
                     discountAmount = 300_000;
                 } else if (request.getTier() == CustomerTier.GOLD || request.getTier() == CustomerTier.DIAMOND) {
                     discountAmount = 500_000;
+                } else {
+                    throw new InvalidCouponException("Mã giảm giá áp dụng sai đối tượng");
                 }
             } else {
                 // [EX-01]: Mã giảm giá hết hạn hoặc không tồn tại (ném HTTP 404)
@@ -113,13 +126,8 @@ public class CheckoutService {
             }
         }
 
-        // BƯỚC 4: Chốt tổng tiền & [EX-02] Luồng ngoại lệ tiền âm
+        // BƯỚC 4: Chốt tổng tiền & [EX-02] Luồng ngoại lệ tiền âm (tự động làm tròn về 0 VNĐ)
         long finalAmount = totalCartValue + shippingFee - discountAmount;
-        
-        if (finalAmount < 0) {
-            return 0; // Làm tròn về 0 VNĐ
-        }
-
-        return finalAmount;
+        return Math.max(0L, finalAmount);
     }
 }
